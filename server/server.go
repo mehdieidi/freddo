@@ -25,8 +25,6 @@ func main() {
 		panic(err)
 	}
 
-	fmt.Println("Listening...")
-
 	go prompt(conn)
 
 	peerIndex := 0
@@ -35,7 +33,6 @@ func main() {
 		buf := make([]byte, 2048)
 		n, peerAddr, err := conn.ReadFromUDP(buf)
 		if err != nil {
-			fmt.Println(err)
 			continue
 		}
 
@@ -85,7 +82,6 @@ func prompt(conn *net.UDPConn) {
 			peerIDSet = false
 
 			pID, _ := strconv.Atoi(peerID)
-
 			writeTo(conn, pID, text)
 		} else if text == "#peers" {
 			printPeers()
@@ -111,5 +107,4 @@ func writeTo(conn *net.UDPConn, peerID int, text string) {
 	defer mutex.RUnlock()
 
 	conn.WriteToUDP([]byte(text), peersAddr[peerID])
-
 }

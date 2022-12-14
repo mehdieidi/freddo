@@ -15,7 +15,7 @@ func main() {
 	}
 	defer conn.Close()
 
-	if err = writeTo(conn, "hey my deer server peer"); err != nil {
+	if err = writeTo(conn, "hey my deer peer!"); err != nil {
 		panic(err)
 	}
 
