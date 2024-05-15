@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"log/slog"
 	"net"
 	"os"
 	"strings"
@@ -13,9 +14,15 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	defer conn.Close()
+	defer func(conn net.Conn) {
+		err := conn.Close()
+		if err != nil {
+			slog.Error("error closing connection", "err", err)
+		}
+	}(conn)
 
-	if err = writeTo(conn, "hey my dear peer!"); err != nil {
+	err = writeTo(conn, "hey my dear peer!")
+	if err != nil {
 		panic(err)
 	}
 
@@ -23,8 +30,10 @@ func main() {
 
 	for {
 		buf := make([]byte, 2048)
-		if _, err = bufio.NewReader(conn).Read(buf); err != nil {
-			panic(err)
+		_, err = bufio.NewReader(conn).Read(buf)
+		if err != nil {
+			slog.Error("error reading from connection", "err", err)
+			continue
 		}
 
 		go handle(conn, buf)
@@ -45,8 +54,9 @@ func prompt(conn net.Conn) {
 		text, _ := reader.ReadString('\n')
 		text = strings.TrimSpace(text)
 
-		if err := writeTo(conn, text); err != nil {
-			panic(err)
+		err := writeTo(conn, text)
+		if err != nil {
+			slog.Error("error writing to connection", "err", err)
 		}
 	}
 }

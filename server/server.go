@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"log/slog"
 	"net"
 	"os"
 	"strconv"
@@ -11,7 +12,7 @@ import (
 )
 
 var peersMap = make(map[string]int)
-var peersAddr = []*net.UDPAddr{}
+var peersAddr []*net.UDPAddr
 var mutex sync.RWMutex
 
 func main() {
@@ -24,6 +25,12 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+	defer func(c *net.UDPConn) {
+		err := c.Close()
+		if err != nil {
+			slog.Error("error closing conn", "err", err)
+		}
+	}(conn)
 
 	go prompt(conn)
 
@@ -39,7 +46,8 @@ func main() {
 		peerKey := peerAddr.IP.String() + strconv.Itoa(peerAddr.Port)
 
 		mutex.Lock()
-		if _, ok := peersMap[peerKey]; !ok {
+		_, ok := peersMap[peerKey]
+		if !ok {
 			peersMap[peerKey] = peerIndex
 			peersAddr = append(peersAddr, peerAddr)
 
@@ -56,21 +64,24 @@ func handle(conn *net.UDPConn, addr *net.UDPAddr, buf []byte, length int) {
 
 	if msg == "#status" {
 		text := fmt.Sprintf("me: [%v] you: [%v:%v]\n", conn.LocalAddr(), addr.IP, addr.Port)
-		conn.WriteToUDP([]byte(text), addr)
+		_, err := conn.WriteToUDP([]byte(text), addr)
+		if err != nil {
+			slog.Error("error writing to UDP", "err", err, "text", text)
+		}
 	} else {
 		fmt.Printf("\nfrom [%v:%v]: %s\n", addr.IP, addr.Port, buf)
 	}
 }
 
 func prompt(conn *net.UDPConn) {
-	var peerIDSet bool
+	var isPeerIDSet bool
 	var peerID string
 
 	reader := bufio.NewReader(os.Stdin)
 
 	for {
 		prompt := "-> "
-		if peerIDSet {
+		if isPeerIDSet {
 			prompt = "[to peer " + peerID + "]" + " -> "
 		}
 		fmt.Print(prompt)
@@ -78,8 +89,8 @@ func prompt(conn *net.UDPConn) {
 		text, _ := reader.ReadString('\n')
 		text = strings.TrimSpace(text)
 
-		if peerIDSet {
-			peerIDSet = false
+		if isPeerIDSet {
+			isPeerIDSet = false
 
 			pID, _ := strconv.Atoi(peerID)
 			writeTo(conn, pID, text)
@@ -87,7 +98,7 @@ func prompt(conn *net.UDPConn) {
 			printPeers()
 		} else if len(text) > 9 && text[:9] == "#peer_id " {
 			peerID = text[9:]
-			peerIDSet = true
+			isPeerIDSet = true
 		}
 	}
 }
@@ -106,5 +117,8 @@ func writeTo(conn *net.UDPConn, peerID int, text string) {
 	mutex.RLock()
 	defer mutex.RUnlock()
 
-	conn.WriteToUDP([]byte(text), peersAddr[peerID])
+	_, err := conn.WriteToUDP([]byte(text), peersAddr[peerID])
+	if err != nil {
+		slog.Error("error writing to udp conn", "err", err, "peer_id", peerID, "text", text)
+	}
 }
